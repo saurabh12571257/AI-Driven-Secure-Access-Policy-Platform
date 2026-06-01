@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # Go Backend API
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: secureaccess-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - DB_TYPE=sqlite
+      - DB_PATH=secureaccess.db
+    volumes:
+      - backend-db:/app/data
+    restart: unless-stopped
+    depends_on:
+      - opa
+      - vault
+
+  # Next.js Frontend UI
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: secureaccess-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080/api
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  # Open Policy Agent Daemon (OPA)
+  opa:
+    image: openpolicyagent/opa:latest
+    container_name: secureaccess-opa
+    ports:
+      - "8181:8181"
+    command:
+      - "run"
+      - "--server"
+      - "--addr=:8181"
+      - "--log-level=info"
+    restart: unless-stopped
+
+  # HashiCorp Vault (Secrets Management)
+  vault:
+    image: hashicorp/vault:latest
+    container_name: secureaccess-vault
+    ports:
+      - "8200:8200"
+    environment:
+      - VAULT_DEV_ROOT_TOKEN_ID=dev-token-secret-key-1234
+      - VAULT_ADDR=http://127.0.0.1:8200
+    command:
+      - "server"
+      - "-dev"
+      - "-dev-listen-address=0.0.0.0:8200"
+    cap_add:
+      - IPC_LOCK
+    restart: unless-stopped
+
+volumes:
+  backend-db:
+    driver: local

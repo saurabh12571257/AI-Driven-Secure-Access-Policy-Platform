@@ -1,0 +1,137 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secureaccess-backend
+  namespace: secureaccess
+  labels:
+    app: secureaccess-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: secureaccess-backend
+  template:
+    metadata:
+      labels:
+        app: secureaccess-backend
+    spec:
+      containers:
+      - name: backend
+        image: secureaccess-backend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        env:
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: secureaccess-secrets
+              key: gemini-api-key
+        - name: DB_PATH
+          value: "/data/secureaccess.db"
+        volumeMounts:
+        - name: db-storage
+          mountPath: /data
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+      volumes:
+      - name: db-storage
+        persistentVolumeClaim:
+          claimName: sqlite-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: secureaccess-backend-svc
+  namespace: secureaccess
+spec:
+  selector:
+    app: secureaccess-backend
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secureaccess-frontend
+  namespace: secureaccess
+  labels:
+    app: secureaccess-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: secureaccess-frontend
+  template:
+    metadata:
+      labels:
+        app: secureaccess-frontend
+    spec:
+      containers:
+      - name: frontend
+        image: secureaccess-frontend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NEXT_PUBLIC_API_URL
+          value: "http://secureaccess-backend-svc.secureaccess.svc.cluster.local:8080/api"
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: secureaccess-frontend-svc
+  namespace: secureaccess
+spec:
+  selector:
+    app: secureaccess-frontend
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 3000
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: secureaccess-ingress
+  namespace: secureaccess
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: secureaccess.internal
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: secureaccess-backend-svc
+            port:
+              number: 8080
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: secureaccess-frontend-svc
+            port:
+              number: 80

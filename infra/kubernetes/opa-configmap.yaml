@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opa-policy-rules
+  namespace: secureaccess
+  labels:
+    openpolicyagent.org/policy: "rego"
+data:
+  access.rego: |
+    package access
+
+    # Default reject
+    default allow = false
+
+    # Check validity of request context
+    allow {
+        # Valid user email domain
+        endswith(input.user, "@example.com")
+        # Ensure risk score is calculated and below maximum limit
+        input.risk_score <= 70
+        # Check action list mappings
+        valid_actions[input.action]
+    }
+
+    # Allow SREs administrative access on staging environments
+    allow {
+        input.role == "SRE"
+        input.environment == "staging"
+    }
+
+    # Restrict write operations on high risk tiers
+    deny[msg] {
+        input.action == "write"
+        input.risk_score > 70
+        msg := "Write actions are blocked on resources with risk scores above 70 without manual override."
+    }
+
+    valid_actions := {"read", "write", "admin"}

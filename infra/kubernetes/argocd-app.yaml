@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: secureaccess-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/saurabh/secureaccess-platform.git'
+    targetRevision: HEAD
+    path: infra/kubernetes
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: secureaccess
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,55 @@
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default-mtls
+  namespace: secureaccess
+spec:
+  # Enforce encrypted inter-service communication across the namespace
+  mtls:
+    mode: STRICT
+
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: secureaccess-gateway
+  namespace: secureaccess
+spec:
+  selector:
+    istio: ingressgateway # Use Istio default ingress gateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "secureaccess.internal"
+
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: secureaccess-routes
+  namespace: secureaccess
+spec:
+  hosts:
+  - "secureaccess.internal"
+  gateways:
+  - secureaccess-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /api
+    route:
+    - destination:
+        host: secureaccess-backend-svc.secureaccess.svc.cluster.local
+        port:
+          number: 8080
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: secureaccess-frontend-svc.secureaccess.svc.cluster.local
+        port:
+          number: 80
